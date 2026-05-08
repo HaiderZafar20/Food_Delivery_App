@@ -1,0 +1,23 @@
+pipeline {
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/HaiderZafar20/Food_Delivery_App.git'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+        stage('Deploy to Remote Tomcat') {
+            steps {
+                sh '''
+                WAR_FILE=$(ls target/*.war | head -n 1)
+                scp -o StrictHostKeyChecking=no $WAR_FILE user@<local-tomcat-ip>:/opt/tomcat9/webapps/
+                '''
+            }
+        }
+    }
+}
