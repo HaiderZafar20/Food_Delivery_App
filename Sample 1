@@ -1,0 +1,143 @@
+pipeline {
+    agent any
+
+    tools {
+        jdk 'JDK17'
+        maven 'Maven3'
+    }
+
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'master',
+                    url: 'https://github.com/Msocial123/maven-web-application.git'
+            }
+        }
+
+        stage('Clean Workspace') {
+            steps {
+                sh 'mvn clean'
+            }
+        }
+
+        stage('Compile') {
+            steps {
+                sh 'mvn compile'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+
+                    sh '''
+                    mvn sonar:sonar \
+                    -Dsonar.projectKey=maven-web-application \
+                    -Dsonar.projectName=maven-web-application
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Package WAR') {
+            steps {
+                sh 'mvn package -DskipTests'
+            }
+        }
+
+        stage('Deploy to Tomcat') {
+            steps {
+                sh '''
+                docker cp target/maven-web-application.war tomcat:/usr/local/tomcat/webapps/
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                echo 'Application deployed successfully!'
+                echo 'Access application at:'
+                echo 'http://<EC2-PUBLIC-IP>:8090/maven-web-application'
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo 'CI/CD Pipeline executed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline execution failed.'
+        }
+
+        always {
+            cleanWs()
+        }
+    }
+}
+
+
+<plugins>
+
+    <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+        <configuration>
+            <source>${jdk.version}</source>
+            <target>${jdk.version}</target>
+        </configuration>
+    </plugin>
+
+    <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>3.11.0.3922</version>
+    </plugin>
+
+    <plugin>
+        <groupId>org.eclipse.jetty</groupId>
+        <artifactId>jetty-maven-plugin</artifactId>
+        <version>9.2.11.v20150529</version>
+        <configuration>
+            <scanIntervalSeconds>10</scanIntervalSeconds>
+            <webApp>
+                <contextPath>/maven-web-application</contextPath>
+            </webApp>
+        </configuration>
+    </plugin>
+
+</plugins>
+
+
+
+<properties>
+    <jdk.version>17</jdk.version>
+    <spring.version>5.1.2.RELEASE</spring.version>
+    <junit.version>4.11</junit.version>
+    <log4j.version>1.2.17</log4j.version>
+
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+</properties>
